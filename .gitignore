@@ -220,5 +220,5 @@ __marimo__/
 node_modules/
 .DS_Store
 
-datas/vectorstore
-datas/chunks
+datas/vectorstore*
+datas/chunks*

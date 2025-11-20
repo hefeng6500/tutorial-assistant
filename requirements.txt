@@ -9,3 +9,4 @@ python-dotenv==1.2.1
 pydantic==2.12.4
 langchain-text-splitters==1.0.0
 langchain-community==0.4.1
+docx2txt==0.9
