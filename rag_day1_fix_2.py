@@ -79,15 +79,19 @@ def main():
     # 1. Load Data (Only needed if vectorstore doesn't exist, but for simplicity we load to split if needed)
     # Optimization: Check if vectorstore exists first to avoid loading/splitting if not needed?
     # The original logic loaded/split only if vectorstore didn't exist. Let's preserve that logic.
-    
+
     embeddings = get_embeddings()
     
     if os.path.exists(vectorstore_dir):
         vectorstore = get_vectorstore(None, embeddings, vectorstore_dir)
     else:
         text = load_data(data_file)
+
+        # 2. Split Text
         docs = split_text(text)
         save_chunks(docs, chunks_dir)
+
+        # 3. embedding
         vectorstore = get_vectorstore(docs, embeddings, vectorstore_dir)
 
     # 4. Retrieve
