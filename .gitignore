@@ -222,3 +222,4 @@ node_modules/
 
 datas/vectorstore*
 datas/chunks*
+datas/output*
