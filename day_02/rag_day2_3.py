@@ -199,15 +199,15 @@ def main():
         # 1. Get and print chunks
         print(f"--- Retrieved Chunks ({method}) ---")
         retrieved_docs = retriever.invoke(query)
-        # for i, doc in enumerate(retrieved_docs):
-        #     print(f"[{i}] {doc.page_content[:200]}...\n")
+        for i, doc in enumerate(retrieved_docs):
+            print(f"[{i}] {doc.page_content[:200]}...\n")
             
         # 2. Generate Answer
-        print(f"--- LLM Answer ({method}) ---")
+        # print(f"--- LLM Answer ({method}) ---")
         # Note: query_llm will retrieve again internally, which is fine, or we could refactor it.
         # For now, we use it as is to keep it simple.
-        result = query_llm(retriever, query)
-        result.pretty_print()
+        # result = query_llm(retriever, query)
+        # result.pretty_print()
 
 if __name__ == "__main__":
     main()
