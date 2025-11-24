@@ -16,13 +16,13 @@ embeddings = OpenAIEmbeddings(
     # dimensions=1024
 )
 
-if os.path.exists("datas/vectorstore"):
+if os.path.exists("../datas/vectorstore"):
     print("Loading vectorstore from datas/vectorstore")
-    vectorstore = FAISS.load_local("datas/vectorstore", embeddings, allow_dangerous_deserialization=True)
+    vectorstore = FAISS.load_local("../datas/vectorstore", embeddings, allow_dangerous_deserialization=True)
 else:
     print("Creating new vectorstore")
     # 1. 加载数据 Load
-    loader = TextLoader("./datas/古文.md", encoding="utf-8")
+    loader = TextLoader("../datas/古文.md", encoding="utf-8")
     text = loader.load()
 
     # 2. 切分文档 Split（Chunking）
@@ -30,17 +30,17 @@ else:
     docs = text_splitter.split_text(text[0].page_content)
 
     # Save chunks
-    if not os.path.exists("datas/chunks"):
-        os.makedirs("datas/chunks")
+    if not os.path.exists("../datas/chunks"):
+        os.makedirs("../datas/chunks")
     for i, doc in enumerate(docs):
-        with open(f"datas/chunks/chunk_{i}.txt", "w", encoding="utf-8") as f:
+        with open(f"../datas/chunks/chunk_{i}.txt", "w", encoding="utf-8") as f:
             f.write(doc)
 
     print(f"Saved {len(docs)} chunks to datas/chunks")
 
     # 4. 建立向量库 + 检索 Retrieve
     vectorstore = FAISS.from_texts(docs, embeddings)
-    vectorstore.save_local("datas/vectorstore")
+    vectorstore.save_local("../datas/vectorstore")
     print("Saved vectorstore to datas/vectorstore")
 
 retriever = vectorstore.as_retriever()

@@ -66,9 +66,9 @@ def compare_chunking():
     import glob
 
     methods = {
-        "recursive": "datas/chunks_recursive/*.txt",
-        "header":    "datas/chunks_header/*.txt",
-        "sliding":   "datas/chunks_sliding/*.txt",
+        "recursive": "../datas/chunks_recursive/*.txt",
+        "header":    "../datas/chunks_header/*.txt",
+        "sliding":   "../datas/chunks_sliding/*.txt",
     }
 
     for name, path in methods.items():
@@ -84,7 +84,7 @@ def compare_chunking():
         # print(f"Example chunk:\n{chunks[0][:300]}...")
 
 
-def save_chunks(docs, output_dir="datas/chunks"):
+def save_chunks(docs, output_dir="../datas/chunks"):
     """Save chunks to files."""
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
@@ -99,7 +99,7 @@ def get_embeddings():
         model="text-embedding-3-large",
     )
 
-def get_vectorstore(docs, embeddings, persist_dir="datas/vectorstore"):
+def get_vectorstore(docs, embeddings, persist_dir="../datas/vectorstore"):
     """Load or create/save vector store."""
     if os.path.exists(persist_dir):
         print(f"Loading vectorstore from {persist_dir}")
@@ -144,8 +144,8 @@ def test_retrieval(vectorstore, question):
 
 def main():
     # Configuration
-    data_file = "./datas/商业计划书.docx"
-    vectorstore_dir_base = "datas/vectorstore"
+    data_file = "../datas/商业计划书.docx"
+    vectorstore_dir_base = "../datas/vectorstore"
     
     embeddings = get_embeddings()
     
@@ -159,15 +159,15 @@ def main():
     
     # 2.1. Recursive
     recursive_chunks = split_text(full_text)
-    save_chunks(recursive_chunks, "datas/chunks_recursive")
+    save_chunks(recursive_chunks, "../datas/chunks_recursive")
 
     # 2.2. Header-based
     header_chunks = header_based_split(full_text)
-    save_chunks(header_chunks, "datas/chunks_header")
+    save_chunks(header_chunks, "../datas/chunks_header")
 
     # 2.3. Sliding Window
     sliding_chunks = sliding_window_split(full_text)
-    save_chunks(sliding_chunks, "datas/chunks_sliding")
+    save_chunks(sliding_chunks, "../datas/chunks_sliding")
 
     print("Chunking done!")
 

@@ -48,22 +48,7 @@ def header_based_split(text):
 
     return chunks
 
-# Sliding Window Chunker（窗口式），适合长段叙事类文档，解决 Recursive“句子断层”的问题，检索更稳定，召回率更高
-def sliding_window_split(text, window_size=800, overlap=200):
-    chunks = []
-    start = 0
-    length = len(text)
-
-    while start < length:
-        end = start + window_size
-        chunk = text[start:end]
-        chunks.append(chunk)
-        start += (window_size - overlap)
-
-    return chunks
-
-
-def save_chunks(docs, output_dir="datas/chunks"):
+def save_chunks(docs, output_dir="../datas/chunks"):
     """Save chunks to files."""
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
@@ -78,7 +63,7 @@ def get_embeddings():
         model="text-embedding-3-large",
     )
 
-def get_vectorstore(docs, embeddings, persist_dir="datas/vectorstore"):
+def get_vectorstore(docs, embeddings, persist_dir="../datas/vectorstore"):
     """Load or create/save vector store."""
     if os.path.exists(persist_dir):
         print(f"Loading vectorstore from {persist_dir}")
@@ -118,9 +103,11 @@ def query_llm(retriever, query):
 
 def main():
     # Configuration
-    data_file = "./datas/商业计划书.docx"
-    chunks_dir = "datas/chunks"
-    vectorstore_dir = "datas/vectorstore"
+    data_file = "../datas/商业计划书.docx"
+    chunks_dir = "../datas/chunks"
+    vectorstore_dir = "../datas/vectorstore"
+    # query = "代理亿道的三防设备的退出策略？"
+    # query = "代理亿道的产品对我来说有什么风险？"
     query = "帮我计算一下，代理亿道的产品的成本？"
 
     # 1. Load Data (Only needed if vectorstore doesn't exist, but for simplicity we load to split if needed)
@@ -138,10 +125,7 @@ def main():
         # docs = split_text(text[0].page_content)
 
         # 根据标题切分
-        # docs = header_based_split(text[0].page_content)
-
-        # 窗口式切分
-        docs = sliding_window_split(text[0].page_content)
+        docs = header_based_split(text[0].page_content)
         save_chunks(docs, chunks_dir)
 
         # 3. embedding

@@ -18,7 +18,7 @@ def split_text(text, chunk_size=1200, chunk_overlap=20):
     docs = text_splitter.split_text(text[0].page_content)
     return docs
 
-def save_chunks(docs, output_dir="datas/chunks"):
+def save_chunks(docs, output_dir="../datas/chunks"):
     """Save chunks to files."""
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
@@ -33,7 +33,7 @@ def get_embeddings():
         model="text-embedding-3-large",
     )
 
-def get_vectorstore(docs, embeddings, persist_dir="datas/vectorstore"):
+def get_vectorstore(docs, embeddings, persist_dir="../datas/vectorstore"):
     """Load or create/save vector store."""
     if os.path.exists(persist_dir):
         print(f"Loading vectorstore from {persist_dir}")
@@ -71,9 +71,9 @@ def query_llm(retriever, query):
 
 def main():
     # Configuration
-    data_file = "./datas/古文.md"
-    chunks_dir = "datas/chunks"
-    vectorstore_dir = "datas/vectorstore"
+    data_file = "../datas/古文.md"
+    chunks_dir = "../datas/chunks"
+    vectorstore_dir = "../datas/vectorstore"
     query = "长江赋总结一下，哪句写的最好？"
 
     # 1. Load Data (Only needed if vectorstore doesn't exist, but for simplicity we load to split if needed)

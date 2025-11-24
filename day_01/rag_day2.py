@@ -18,7 +18,7 @@ def split_text(text, chunk_size=1200, chunk_overlap=60):
     docs = text_splitter.split_text(text)
     return docs
 
-def save_chunks(docs, output_dir="datas/chunks"):
+def save_chunks(docs, output_dir="../datas/chunks"):
     """Save chunks to files."""
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
@@ -33,7 +33,7 @@ def get_embeddings():
         model="text-embedding-3-large",
     )
 
-def get_vectorstore(docs, embeddings, persist_dir="datas/vectorstore"):
+def get_vectorstore(docs, embeddings, persist_dir="../datas/vectorstore"):
     """Load or create/save vector store."""
     if os.path.exists(persist_dir):
         print(f"Loading vectorstore from {persist_dir}")
@@ -73,9 +73,9 @@ def query_llm(retriever, query):
 
 def main():
     # Configuration
-    data_file = "./datas/商业计划书.docx"
-    chunks_dir = "datas/chunks"
-    vectorstore_dir = "datas/vectorstore"
+    data_file = "../datas/商业计划书.docx"
+    chunks_dir = "../datas/chunks"
+    vectorstore_dir = "../datas/vectorstore"
     query = "代理亿道的三防设备的退出策略？"
     
 
