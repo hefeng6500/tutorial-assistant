@@ -20,7 +20,7 @@ DOCX_PATH = "../datas/商业计划书.docx"
 CHUNKS_ROOT = "../datas"
 VECTORSTORE_DIR_TEMPLATE = os.path.join(CHUNKS_ROOT, "vectorstore_{method}")
 CHUNKS_DIR_TEMPLATE = os.path.join(CHUNKS_ROOT, "chunks_{method}")
-OUTPUT_DIR = "../datas/outputs_day4_v1"
+OUTPUT_DIR = "../datas/outputs_day4_v2"
 
 EMBED_MODEL = "text-embedding-3-large"
 LLM_MODEL = "gpt-5-nano"
@@ -371,7 +371,7 @@ def main():
         "退出策略是什么？",
         "目标市场细分包括哪些？",
         "主要竞争对手有哪些？",
-        "代理亿道的产品，预计明年收入是多少？",
+        "首年预计收入是多少？",
         "公司为何有竞争优势？"
     ]
 
