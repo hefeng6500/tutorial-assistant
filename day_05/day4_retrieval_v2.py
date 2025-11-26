@@ -1,20 +1,16 @@
 import os, glob, json, csv, re, math
-
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
-from langchain_community.embeddings import DashScopeEmbeddings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.document_loaders import Docx2txtLoader
 from langchain_community.vectorstores import FAISS
 
 # BM25 lib
 from rank_bm25 import BM25Okapi
-
 # optional jieba tokenizer for Chinese (recommended)
 try:
     import jieba
-
     HAVE_JIEBA = True
 except Exception:
     HAVE_JIEBA = False
@@ -26,18 +22,17 @@ VECTORSTORE_DIR_TEMPLATE = os.path.join(CHUNKS_ROOT, "vectorstore_{method}")
 CHUNKS_DIR_TEMPLATE = os.path.join(CHUNKS_ROOT, "chunks_{method}")
 OUTPUT_DIR = "../datas/outputs_day4_v2"
 
-EMBED_MODEL = "text-embedding-v4"
-LLM_MODEL = "qwen3-max"
+EMBED_MODEL = "text-embedding-3-large"
+LLM_MODEL = "gpt-5-nano"
 TEMPERATURE = 0.0
 
-TOP_K_VECTOR = 20  # vector top N before rerank
-FINAL_K = 5  # after rerank
-ALPHA = 0.8  # hybrid weight: final = alpha * vector_score + (1-alpha) * bm25_score (after norm)
+TOP_K_VECTOR = 20   # vector top N before rerank
+FINAL_K = 5         # after rerank
+ALPHA = 0.8         # hybrid weight: final = alpha * vector_score + (1-alpha) * bm25_score (after norm)
 # ----------------------------------------
 
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 os.makedirs(CHUNKS_ROOT, exist_ok=True)
-
 
 # ---------- reuse your loader/splitter ----------
 def load_docx(path=DOCX_PATH):
@@ -45,13 +40,9 @@ def load_docx(path=DOCX_PATH):
     docs = loader.load()
     return docs[0].page_content
 
-
 def recursive_split(text, chunk_size=600, chunk_overlap=100):
-    splitter = RecursiveCharacterTextSplitter(
-        chunk_size=chunk_size, chunk_overlap=chunk_overlap
-    )
+    splitter = RecursiveCharacterTextSplitter(chunk_size=chunk_size, chunk_overlap=chunk_overlap)
     return splitter.split_text(text)
-
 
 def header_based_split(text):
     pattern = r"(?:\n|^)(\d{1,2}(?:\.\d{1,2})*\s+[^\n]+)\n"
@@ -61,10 +52,9 @@ def header_based_split(text):
     chunks = []
     for i in range(1, len(parts), 2):
         title = parts[i].strip()
-        content = parts[i + 1].strip() if i + 1 < len(parts) else ""
+        content = parts[i+1].strip() if i+1 < len(parts) else ""
         chunks.append(f"{title}\n{content}")
     return chunks
-
 
 def sliding_window_split(text, window_size=800, overlap=200):
     chunks = []
@@ -73,9 +63,8 @@ def sliding_window_split(text, window_size=800, overlap=200):
     while start < L:
         end = min(L, start + window_size)
         chunks.append(text[start:end])
-        start += window_size - overlap
+        start += (window_size - overlap)
     return chunks
-
 
 # ---------- simple tokenizer (for BM25) ----------
 def simple_tokenize(text):
@@ -86,13 +75,11 @@ def simple_tokenize(text):
     toks = [t for t in s.split() if t.strip()]
     return toks
 
-
 # ---------- BM25 index builder ----------
 def build_bm25_index(chunks):
     tokenized = [simple_tokenize(c) for c in chunks]
     bm25 = BM25Okapi(tokenized)
     return bm25, tokenized
-
 
 # ---------- BM25 retrieve ----------
 def bm25_retrieve(bm25, tokenized_corpus, query, top_n=20):
@@ -100,7 +87,6 @@ def bm25_retrieve(bm25, tokenized_corpus, query, top_n=20):
     scores = bm25.get_scores(q_tokens)  # list of scores per doc
     ranked = sorted(enumerate(scores), key=lambda x: x[1], reverse=True)[:top_n]
     return ranked  # list of (idx, score)
-
 
 # ---------- helper: normalize scores to [0,1] ----------
 def normalize_scores(score_list):
@@ -114,25 +100,19 @@ def normalize_scores(score_list):
     normed = [(i, (s - minv) / (maxv - minv)) for (i, s) in score_list]
     return normed
 
-
 # ---------- build/load faiss from chunks ----------
 def build_or_load_faiss(chunks, embeddings, persist_dir):
     if os.path.exists(persist_dir):
         try:
-            vs = FAISS.load_local(
-                persist_dir, embeddings, allow_dangerous_deserialization=True
-            )
+            vs = FAISS.load_local(persist_dir, embeddings, allow_dangerous_deserialization=True)
             print(f"Loaded vectorstore from {persist_dir}")
             return vs
         except Exception as e:
             print("Failed to load existing vectorstore, rebuilding. Error:", e)
-
-    print("Building vectorstore...", embeddings)
     vs = FAISS.from_texts(chunks, embeddings)
     vs.save_local(persist_dir)
     print(f"Built and saved vectorstore to {persist_dir}")
     return vs
-
 
 # ---------- multi-query rewrite using LLM ----------
 def multi_query_rewrite(llm, query, n_variants=3):
@@ -166,7 +146,6 @@ def multi_query_rewrite(llm, query, n_variants=3):
         return out[:n_variants]
     return arr[:n_variants]
 
-
 # ---------- hybrid retrieve: combine vector and bm25 scores ----------
 def hybrid_retrieve(vectorstore, bm25, chunks, query, top_n=TOP_K_VECTOR, alpha=ALPHA):
     # 1) vector top N (get ids and vector scores)
@@ -176,9 +155,7 @@ def hybrid_retrieve(vectorstore, bm25, chunks, query, top_n=TOP_K_VECTOR, alpha=
     try:
         vs_results = vectorstore.similarity_search_with_score(query, k=top_n)
         # vs_results: list of (Document, score)
-        vec_list = [
-            (i, score) for i, (_, score) in enumerate(vs_results)
-        ]  # placeholder indices will be remapped
+        vec_list = [(i, score) for i, (_, score) in enumerate(vs_results)]  # placeholder indices will be remapped
         # But we need doc indices relative to chunks. We'll map by matching doc content:
         vec_candidates = []
         for doc, score in vs_results:
@@ -206,7 +183,7 @@ def hybrid_retrieve(vectorstore, bm25, chunks, query, top_n=TOP_K_VECTOR, alpha=
                 idx = chunks.index(d.page_content)
             except ValueError:
                 idx = None
-                for j, c in enumerate(chunks):
+                for j,c in enumerate(chunks):
                     if d.page_content.strip() and d.page_content.strip()[:50] in c:
                         idx = j
                         break
@@ -216,9 +193,7 @@ def hybrid_retrieve(vectorstore, bm25, chunks, query, top_n=TOP_K_VECTOR, alpha=
     vec_norm = normalize_scores(vec_candidates)
 
     # 2) bm25 top N
-    bm25_ranks = bm25_retrieve(
-        bm25, None, query, top_n=top_n
-    )  # returns list (idx, score)
+    bm25_ranks = bm25_retrieve(bm25, None, query, top_n=top_n)  # returns list (idx, score)
     bm25_norm = normalize_scores(bm25_ranks)
 
     # 3) merge: create dict of idx -> combined score
@@ -231,7 +206,6 @@ def hybrid_retrieve(vectorstore, bm25, chunks, query, top_n=TOP_K_VECTOR, alpha=
     # 4) sort and return top candidates
     merged = sorted(scores.items(), key=lambda x: x[1], reverse=True)[:top_n]
     return merged  # list of (idx, combined_score)
-
 
 # ---------- rerank by LLM: score candidates 0-100 and return top K ----------
 def rerank_by_llm(llm, query, candidates, chunks, top_k=FINAL_K):
@@ -246,9 +220,7 @@ def rerank_by_llm(llm, query, candidates, chunks, top_k=FINAL_K):
         text = chunks[idx]
         parts.append({"id": f"chunk_{idx}", "text": text[:1500]})  # truncate long
     # build JSON-like list for prompt
-    ctx = "\n\n---\n\n".join(
-        [f"## chunk_{p['id'].split('_')[-1]}\n{p['text']}" for p in parts]
-    )
+    ctx = "\n\n---\n\n".join([f"## chunk_{p['id'].split('_')[-1]}\n{p['text']}" for p in parts])
 
     prompt = f"""
 你是一个严谨的评估助手。请根据提供的上下文片段为下列问题评估每个片段的**相关性评分（0-100）**，评分越高代表片段越有助于回答问题。
@@ -277,16 +249,13 @@ def rerank_by_llm(llm, query, candidates, chunks, top_k=FINAL_K):
         # fallback: naive heuristic - ask LLM to produce per-chunk lines? but for robustness:
         # If parse fails, we will assign uniform decreasing scores
         for i, (idx, sc) in enumerate(candidates):
-            scores.append((idx, max(0, 100 - i * 5)))
+            scores.append((idx, max(0, 100 - i*5)))
     # sort by score desc and return top_k
     scores_sorted = sorted(scores, key=lambda x: x[1], reverse=True)[:top_k]
     return scores_sorted
 
-
 # ---------- high-level pipeline: multi-query + hybrid + rerank ----------
-def pipeline_query(
-    llm, vectorstore, bm25, chunks, query, multi_q=3, top_n=TOP_K_VECTOR, alpha=ALPHA
-):
+def pipeline_query(llm, vectorstore, bm25, chunks, query, multi_q=3, top_n=TOP_K_VECTOR, alpha=ALPHA):
     # 1) multi-query rewrite
     rewrites = multi_query_rewrite(llm, query, n_variants=multi_q)
     # dedupe
@@ -297,9 +266,7 @@ def pipeline_query(
     candidate_scores = {}  # idx -> max_score
     all_candidates = []
     for rq in rewrites:
-        merged = hybrid_retrieve(
-            vectorstore, bm25, chunks, rq, top_n=top_n, alpha=alpha
-        )
+        merged = hybrid_retrieve(vectorstore, bm25, chunks, rq, top_n=top_n, alpha=alpha)
         for idx, sc in merged:
             if idx is None:
                 continue
@@ -314,10 +281,9 @@ def pipeline_query(
 
     # 3) rerank top_candidates by LLM
     reranked = rerank_by_llm(llm, query, top_candidates, chunks, top_k=FINAL_K)
-    used_ids = [f"chunk_{idx}" for idx, _ in reranked]
+    used_ids = [f"chunk_{idx}" for idx,_ in reranked]
     print("Reranked top:", reranked)
     return reranked, used_ids  # list of (idx, score_llm)
-
 
 # ---------- core: run experiments for a given chunking method ----------
 def run_for_method(method_name, chunks, embeddings, queries, llm):
@@ -326,16 +292,11 @@ def run_for_method(method_name, chunks, embeddings, queries, llm):
     vs_dir = VECTORSTORE_DIR_TEMPLATE.format(method=method_name)
 
     # ensure chunks saved
-    if (
-        not os.path.exists(chunks_dir)
-        or len(glob.glob(os.path.join(chunks_dir, "*.txt"))) == 0
-    ):
+    if not os.path.exists(chunks_dir) or len(glob.glob(os.path.join(chunks_dir, "*.txt"))) == 0:
         # save chunks
         os.makedirs(chunks_dir, exist_ok=True)
         for i, c in enumerate(chunks):
-            with open(
-                os.path.join(chunks_dir, f"chunk_{i}.txt"), "w", encoding="utf-8"
-            ) as f:
+            with open(os.path.join(chunks_dir, f"chunk_{i}.txt"), "w", encoding="utf-8") as f:
                 f.write(c)
 
     # build/load vectorstore
@@ -346,16 +307,7 @@ def run_for_method(method_name, chunks, embeddings, queries, llm):
     results = []
     for q in queries:
         print("\nQuery:", q)
-        reranked, used_ids = pipeline_query(
-            llm,
-            vectorstore,
-            bm25,
-            chunks,
-            q,
-            multi_q=3,
-            top_n=TOP_K_VECTOR,
-            alpha=ALPHA,
-        )
+        reranked, used_ids = pipeline_query(llm, vectorstore, bm25, chunks, q, multi_q=3, top_n=TOP_K_VECTOR, alpha=ALPHA)
         # prepare output record
         used = []
         for idx, score in reranked:
@@ -386,15 +338,13 @@ def run_for_method(method_name, chunks, embeddings, queries, llm):
             parsed = json.loads(re.search(r"\{.*\}", txt, flags=re.S).group(0))
         except Exception:
             parsed = {"answer": txt.strip(), "used_sources": []}
-        results.append(
-            {
-                "method": method_name,
-                "query": q,
-                "answer": parsed.get("answer", ""),
-                "used_sources": used_ids,
-                "raw_llm": txt,
-            }
-        )
+        results.append({
+            "method": method_name,
+            "query": q,
+            "answer": parsed.get("answer", ""),
+            "used_sources": used_ids,
+            "raw_llm": txt
+        })
         # save per query
         safe_q = re.sub(r"[^\w\u4e00-\u9fff]+", "_", q)[:60]
         outpath = os.path.join(OUTPUT_DIR, f"res_{method_name}_{safe_q}.json")
@@ -403,87 +353,53 @@ def run_for_method(method_name, chunks, embeddings, queries, llm):
         print("Saved result to", outpath)
     return results
 
-
 # ---------- main ----------
 def main():
     full_text = load_docx(DOCX_PATH)
     print("Loaded document length:", len(full_text))
 
     methods = {
-        "recursive": lambda txt: recursive_split(
-            txt, chunk_size=600, chunk_overlap=100
-        ),
+        "recursive": lambda txt: recursive_split(txt, chunk_size=600, chunk_overlap=100),
         "header": header_based_split,
-        "sliding": lambda txt: sliding_window_split(txt, window_size=800, overlap=200),
+        "sliding": lambda txt: sliding_window_split(txt, window_size=800, overlap=200)
     }
 
-    # embeddings = OpenAIEmbeddings(
-    #     model=EMBED_MODEL,
-    #     api_key=os.getenv("DASHSCOPE_API_KEY"),
-    #     base_url=os.getenv("DASHSCOPE_BASE_URL"),
-    # )
-
-    embeddings = DashScopeEmbeddings(
-        model="text-embedding-v4",
-    )
-
-    print("Loaded embeddings model:", embeddings)
-
-    llm = ChatOpenAI(
-        model=LLM_MODEL,
-        temperature=TEMPERATURE,
-        base_url=os.getenv("DASHSCOPE_BASE_URL"),
-        api_key=os.getenv("DASHSCOPE_API_KEY"),
-    )
+    embeddings = OpenAIEmbeddings(model=EMBED_MODEL)
+    llm = ChatOpenAI(model=LLM_MODEL, temperature=TEMPERATURE)
 
     queries = [
         "退出策略是什么？",
         "目标市场细分包括哪些？",
         "主要竞争对手有哪些？",
         "首年预计收入是多少？",
-        "公司为何有竞争优势？",
+        "公司为何有竞争优势？"
     ]
 
     summary = []
     for method, splitter in methods.items():
         # get chunks
         chunks_dir = CHUNKS_DIR_TEMPLATE.format(method=method)
-        if (
-            os.path.exists(chunks_dir)
-            and len(glob.glob(os.path.join(chunks_dir, "*.txt"))) > 0
-        ):
-            chunks = [
-                open(p, "r", encoding="utf-8").read()
-                for p in sorted(glob.glob(os.path.join(chunks_dir, "*.txt")))
-            ]
+        if os.path.exists(chunks_dir) and len(glob.glob(os.path.join(chunks_dir, "*.txt"))) > 0:
+            chunks = [open(p, "r", encoding="utf-8").read() for p in sorted(glob.glob(os.path.join(chunks_dir, "*.txt")))]
         else:
             chunks = splitter(full_text)
         res = run_for_method(method, chunks, embeddings, queries, llm)
         for r in res:
-            summary.append(
-                {
-                    "method": r["method"],
-                    "query": r["query"],
-                    "answer_len": len(r["answer"]),
-                    "num_source_chunks": (
-                        len(r["used_sources"])
-                        if isinstance(r["used_sources"], list)
-                        else 0
-                    ),
-                }
-            )
+            summary.append({
+                "method": r["method"],
+                "query": r["query"],
+                "answer_len": len(r["answer"]),
+                "num_source_chunks": len(r["used_sources"]) if isinstance(r["used_sources"], list) else 0
+            })
 
     # save summary csv
     csv_path = os.path.join(OUTPUT_DIR, "summary.csv")
     with open(csv_path, "w", encoding="utf-8", newline="") as f:
-        writer = csv.DictWriter(
-            f, fieldnames=["method", "query", "answer_len", "num_source_chunks"]
-        )
+        writer = csv.DictWriter(f, fieldnames=["method", "query", "answer_len", "num_source_chunks"])
         writer.writeheader()
         for row in summary:
             writer.writerow(row)
     print("All done. Outputs in", OUTPUT_DIR)
-
 
 if __name__ == "__main__":
     main()
