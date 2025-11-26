@@ -1,9 +1,11 @@
+# pipeline.py
 import os
 import glob
 import json
 import re
 from config import CHUNKS_DIR_TEMPLATE, VECTORSTORE_DIR_TEMPLATE, OUTPUT_DIR, TOP_K_VECTOR, ALPHA, FINAL_K
 from retrieval import BM25Retriever, VectorRetriever, HybridRetriever
+from query_processor import QueryProcessor
 
 class RetrievalPipeline:
     def __init__(self, llm_service):
@@ -11,9 +13,10 @@ class RetrievalPipeline:
 
     def run_query(self, query, vectorstore, bm25_retriever, chunks, multi_q=3, top_n=TOP_K_VECTOR, alpha=ALPHA):
         # 1) multi-query rewrite
-        rewrites = self.llm_service.rewrite_query(query, n_variants=multi_q)
-        # dedupe
-        rewrites = list(dict.fromkeys([r.strip() for r in rewrites if r.strip()]))[:multi_q]
+        # 使用通用 QueryProcessor 进行 rewrite 与分类（Day05 要求的修改）
+        qp = QueryProcessor.process(query, self.llm_service, n_variants=multi_q)
+        # qp.rewrites 已保证包含原始 query 在首位且去重
+        rewrites = qp.rewrites
         print("Rewrites:", rewrites)
 
         # 2) for each rewrite, run hybrid_retrieve and collect candidate indices with scores
@@ -29,7 +32,13 @@ class RetrievalPipeline:
         merged_list = sorted(candidate_scores.items(), key=lambda x: x[1], reverse=True)
         # take top top_n unique candidates
         top_candidates = merged_list[:top_n]
-        print("Candidates (pre-rerank):", top_candidates[:10])
+
+        # convert pre-rerank candidate scores to plain Python types for safe JSON/debugging
+        pre_rerank = [(int(i), float(s)) for (i, s) in top_candidates]
+        # if you want to inspect quickly, uncomment the next line:
+        print("Pre-rerank (cleaned):", pre_rerank)
+
+        # print("Candidates (pre-rerank):", top_candidates[:10])
 
         # 3) rerank top_candidates by LLM
         reranked = self.llm_service.rerank(query, top_candidates, chunks, top_k=FINAL_K)
