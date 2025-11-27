@@ -14,34 +14,37 @@ class RetrievalPipeline:
     def run_query(self, query, vectorstore, bm25_retriever, chunks, multi_q=3, top_n=TOP_K_VECTOR, alpha=ALPHA):
         # 1) multi-query rewrite
         # 使用通用 QueryProcessor 进行 rewrite 与分类（Day05 要求的修改）
+        # 0) Query processing (use QueryProcessor) - already present
         qp = QueryProcessor.process(query, self.llm_service, n_variants=multi_q)
-        # qp.rewrites 已保证包含原始 query 在首位且去重
         rewrites = qp.rewrites
+        print("Query category:", qp.category)
         print("Rewrites:", rewrites)
 
+        # Choose dynamic alpha mapping based on category
+        category_to_alpha = {
+            "numeric": 0.4,   # number-focused -> more BM25
+            "definition": 0.8,
+            "entity": 0.6,
+            "open": 0.5
+        }
+        alpha_used = category_to_alpha.get(qp.category, alpha)
+        print(f"Using alpha={alpha_used} for category={qp.category}")
+
         # 2) for each rewrite, run hybrid_retrieve and collect candidate indices with scores
-        candidate_scores = {}  # idx -> max_score
+        candidate_scores = {}
         for rq in rewrites:
-            merged = HybridRetriever.retrieve(vectorstore, bm25_retriever, chunks, rq, top_n=top_n, alpha=alpha)
-            for idx, sc in merged:
-                if idx is None:
-                    continue
-                if idx not in candidate_scores or sc > candidate_scores[idx]:
-                    candidate_scores[idx] = sc
-        # convert to list sorted
-        merged_list = sorted(candidate_scores.items(), key=lambda x: x[1], reverse=True)
-        # take top top_n unique candidates
-        top_candidates = merged_list[:top_n]
+            merged = HybridRetriever.retrieve(vectorstore, bm25_retriever, chunks, rq, top_n=top_n, alpha=alpha_used)
+            ...
+        # after building top_candidates...
+        print("Candidates (pre-rerank):", top_candidates[:10])
 
-        # convert pre-rerank candidate scores to plain Python types for safe JSON/debugging
-        pre_rerank = [(int(i), float(s)) for (i, s) in top_candidates]
-        # if you want to inspect quickly, uncomment the next line:
-        print("Pre-rerank (cleaned):", pre_rerank)
+        # 3) rerank top_candidates by LLM -> use rerank_v2
+        try:
+            reranked = self.llm_service.rerank_v2(query, top_candidates, chunks, top_k=FINAL_K)
+        except Exception as e:
+            print("rerank_v2 failed, falling back to original rerank. Err:", e)
+            reranked = self.llm_service.rerank(query, top_candidates, chunks, top_k=FINAL_K)
 
-        # print("Candidates (pre-rerank):", top_candidates[:10])
-
-        # 3) rerank top_candidates by LLM
-        reranked = self.llm_service.rerank(query, top_candidates, chunks, top_k=FINAL_K)
         used_ids = [f"chunk_{idx}" for idx,_ in reranked]
         print("Reranked top:", reranked)
         return reranked, used_ids  # list of (idx, score_llm)
