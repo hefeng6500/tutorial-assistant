@@ -27,10 +27,10 @@ def main():
         "recursive": lambda txt: DocumentProcessor.recursive_split(
             txt, chunk_size=600, chunk_overlap=100
         ),
-        "header": DocumentProcessor.header_based_split,
-        "sliding": lambda txt: DocumentProcessor.sliding_window_split(
-            txt, window_size=800, overlap=200
-        ),
+        # "header": DocumentProcessor.header_based_split,
+        # "sliding": lambda txt: DocumentProcessor.sliding_window_split(
+        #     txt, window_size=800, overlap=200
+        # ),
     }
 
     embeddings = DashScopeEmbeddings(

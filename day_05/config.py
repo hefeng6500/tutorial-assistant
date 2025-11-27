@@ -18,7 +18,7 @@ TEMPERATURE = 0.0
 # Retrieval Parameters
 TOP_K_VECTOR = 20  # vector top N before rerank
 FINAL_K = 5  # after rerank
-ALPHA = 0.8  # hybrid weight: final = alpha * vector_score + (1-alpha) * bm25_score (after norm)
+ALPHA = 0.4  # hybrid weight: final = alpha * vector_score + (1-alpha) * bm25_score (after norm)
 
 # Ensure directories exist
 os.makedirs(OUTPUT_DIR, exist_ok=True)

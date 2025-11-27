@@ -5,7 +5,6 @@ import json
 import re
 from config import CHUNKS_DIR_TEMPLATE, VECTORSTORE_DIR_TEMPLATE, OUTPUT_DIR, TOP_K_VECTOR, ALPHA, FINAL_K
 from retrieval import BM25Retriever, VectorRetriever, HybridRetriever
-from query_processor import QueryProcessor
 
 class RetrievalPipeline:
     def __init__(self, llm_service):
@@ -13,41 +12,54 @@ class RetrievalPipeline:
 
     def run_query(self, query, vectorstore, bm25_retriever, chunks, multi_q=3, top_n=TOP_K_VECTOR, alpha=ALPHA):
         # 1) multi-query rewrite
-        # 使用通用 QueryProcessor 进行 rewrite 与分类（Day05 要求的修改）
-        # 0) Query processing (use QueryProcessor) - already present
-        qp = QueryProcessor.process(query, self.llm_service, n_variants=multi_q)
-        rewrites = qp.rewrites
-        print("Query category:", qp.category)
+        rewrites = self.llm_service.rewrite_query(query, n_variants=multi_q)
+        rewrites = list(dict.fromkeys([r.strip() for r in rewrites if r.strip()]))[:multi_q]
         print("Rewrites:", rewrites)
 
-        # Choose dynamic alpha mapping based on category
-        category_to_alpha = {
-            "numeric": 0.4,   # number-focused -> more BM25
-            "definition": 0.8,
-            "entity": 0.6,
-            "open": 0.5
-        }
-        alpha_used = category_to_alpha.get(qp.category, alpha)
-        print(f"Using alpha={alpha_used} for category={qp.category}")
+        # Optionally: you may classify query and pick dynamic alpha here (if you have a QueryProcessor)
+        # For backward compatibility we use provided alpha param.
+        alpha_used = alpha
+        print(f"Using alpha={alpha_used}")
 
         # 2) for each rewrite, run hybrid_retrieve and collect candidate indices with scores
-        candidate_scores = {}
+        candidate_scores = {}  # idx -> max_score
         for rq in rewrites:
             merged = HybridRetriever.retrieve(vectorstore, bm25_retriever, chunks, rq, top_n=top_n, alpha=alpha_used)
-            ...
-        # after building top_candidates...
+            for idx, sc in merged:
+                if idx is None:
+                    continue
+                if idx not in candidate_scores or sc > candidate_scores[idx]:
+                    candidate_scores[idx] = sc
+        merged_list = sorted(candidate_scores.items(), key=lambda x: x[1], reverse=True)
+        top_candidates = merged_list[:top_n]
         print("Candidates (pre-rerank):", top_candidates[:10])
 
-        # 3) rerank top_candidates by LLM -> use rerank_v2
+        # 3) rerank top_candidates by LLM
         try:
             reranked = self.llm_service.rerank_v2(query, top_candidates, chunks, top_k=FINAL_K)
         except Exception as e:
             print("rerank_v2 failed, falling back to original rerank. Err:", e)
             reranked = self.llm_service.rerank(query, top_candidates, chunks, top_k=FINAL_K)
 
-        used_ids = [f"chunk_{idx}" for idx,_ in reranked]
+        used_ids = [f"chunk_{idx}" for idx, _ in reranked]
         print("Reranked top:", reranked)
-        return reranked, used_ids  # list of (idx, score_llm)
+
+        # --------------------------
+        # Day8: Context Optimization
+        # --------------------------
+        try:
+            from context_optimizer import ContextOptimizer
+            context_optimizer = ContextOptimizer()
+            # optimized_context is a string (ready to pass to generate_answer)
+            optimized_context = context_optimizer.process(query, reranked, chunks)
+        except Exception as _ctx_e:
+            # fallback: pass reranked (list) to generate_answer for backward compatibility
+            optimized_context = reranked
+
+        # 4) generate answer (accepts optimized_context string or reranked list)
+        parsed, raw_llm, final_context = self.llm_service.generate_answer(query, optimized_context, chunks)
+
+        return reranked, used_ids, parsed, raw_llm, final_context
 
     def run_experiment(self, method_name, chunks, embeddings, queries):
         print("\n=== Running method:", method_name)
@@ -70,11 +82,7 @@ class RetrievalPipeline:
         results = []
         for q in queries:
             print("\nQuery:", q)
-            reranked, used_ids = self.run_query(q, vectorstore, bm25_retriever, chunks, multi_q=3, top_n=TOP_K_VECTOR, alpha=ALPHA)
-            
-            # generate answer
-            parsed, raw_llm, _ = self.llm_service.generate_answer(q, reranked, chunks)
-            
+            reranked, used_ids, parsed, raw_llm, final_context = self.run_query(q, vectorstore, bm25_retriever, chunks, multi_q=3, top_n=TOP_K_VECTOR, alpha=ALPHA)
             results.append({
                 "method": method_name,
                 "query": q,
